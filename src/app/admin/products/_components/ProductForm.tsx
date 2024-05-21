@@ -1,0 +1,64 @@
+"use client";
+
+import { useState } from "react";
+import { useFormStatus } from "react-dom";
+import { formatCurrency } from "@/lib/formatters";
+import { addProduct } from "../../_actions/products";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+
+const ProductForm = () => {
+  const [priceInCents, setPriceInCents] = useState<number>();
+
+  return (
+    <form action={addProduct} className="space-y-8">
+      <div className="space-y-2">
+        <Label htmlFor="name">Name</Label>
+        <Input type="text" id="name" name="name" required />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="priceInCents">Price in Cents</Label>
+        <Input
+          type="number"
+          id="priceInCents"
+          name="priceInCents"
+          required
+          value={priceInCents}
+          onChange={event => {
+            setPriceInCents(Number(event.target.value) || undefined);
+          }}
+        />
+        <div className="text-muted-foreground">
+          {formatCurrency((priceInCents || 0) / 100)}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="description">Description</Label>
+        <Textarea id="description" name="description" required />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="file">File</Label>
+        <Input type="file" id="file" name="file" required />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="image">Image</Label>
+        <Input type="file" id="image" name="image" required />
+      </div>
+      <SubmitButton />
+    </form>
+  );
+}
+
+const SubmitButton = () => {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? "Saving..." : "Save"}
+    </Button>
+  );
+}
+
+export default ProductForm;
