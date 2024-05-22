@@ -3,10 +3,11 @@
 import fs from "fs/promises";
 import { File } from "buffer";
 import { z } from "zod";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import db from "@/db/db";
 
 const fileSchema = z.instanceof(File, { message: "Required" });
+
 const imageSchema = fileSchema.refine(file =>
   file.size === 0 || file.type.startsWith("image/")
 );
@@ -19,7 +20,10 @@ const addSchema = z.object({
   image: imageSchema.refine(file => file.size > 0, "Required")
 });
 
-export const addProduct = async (formData: FormData) => {
+export const addProduct = async (
+  previousState: unknown,
+  formData: FormData
+) => {
   const result = addSchema.safeParse(Object.fromEntries(formData.entries()));
   if (result.success === false) return result.error.formErrors.fieldErrors;
 
@@ -41,9 +45,86 @@ export const addProduct = async (formData: FormData) => {
       name: data.name,
       description: data.description,
       priceInCents: data.priceInCents,
+      isAvailableForPurchase: false,
       filePath,
       imagePath
   }});
 
   redirect("/admin/products");
+}
+
+const editSchema = addSchema.extend({
+  file: fileSchema.optional(),
+  image: imageSchema.optional()
+});
+
+export const editProduct = async (
+  id: string,
+  previousState: unknown,
+  formData: FormData
+) => {
+  const result = editSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (result.success === false) return result.error.formErrors.fieldErrors;
+
+  const data = result.data;
+  const product = await db.product.findUnique({
+    where: {
+      id
+  }});
+  if (product == null) return notFound();
+
+  let filePath = product.filePath;
+  if (data.file != null && data.file.size > 0) {
+    await fs.unlink(product.filePath);
+    filePath = `products/${crypto.randomUUID()}-${data.file.name}`;
+    await fs.writeFile(filePath, Buffer.from(await data.file.arrayBuffer()));
+  }
+
+  let imagePath = product.imagePath;
+  if (data.image != null && data.image.size > 0) {
+    await fs.unlink(`public${product.imagePath}`);
+    imagePath = `/products/${crypto.randomUUID()}-${data.image.name}`;
+    await fs.writeFile(
+      `public${imagePath}`,
+      Buffer.from(await data.image.arrayBuffer())
+    );
+  }
+
+  await db.product.update({
+    where: {
+      id
+    },
+    data: {
+      name: data.name,
+      description: data.description,
+      priceInCents: data.priceInCents,
+      filePath,
+      imagePath
+  }});
+
+  redirect("/admin/products");
+}
+
+export const toggleProductAvailability = async (
+  id: string,
+  isAvailableForPurchase: boolean
+) => {
+  await db.product.update({
+    where: {
+      id
+    },
+    data: {
+      isAvailableForPurchase
+  }});
+}
+
+export const deleteProduct = async (id: string) => {
+  const product = await db.product.delete({
+    where: {
+      id
+  }});
+  if (product == null) return notFound();
+
+  await fs.unlink(product.filePath);
+  await fs.unlink(`public${product.imagePath}`);
 }
